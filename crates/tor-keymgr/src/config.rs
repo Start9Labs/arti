@@ -53,7 +53,9 @@ impl std::fmt::Debug for ArtiKeystoreKind {
 impl PartialEq for ArtiKeystoreKind {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            (Self::Native, Self::Native) | (Self::Ephemeral, Self::Ephemeral) => true,
+            (Self::Native, Self::Native) => true,
+            #[cfg(feature = "ephemeral-keystore")]
+            (Self::Ephemeral, Self::Ephemeral) => true,
             (Self::Custom(a), Self::Custom(b)) if Arc::ptr_eq(a, b) => true,
             _ => false,
         }
