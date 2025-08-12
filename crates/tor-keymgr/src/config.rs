@@ -7,18 +7,19 @@ use amplify::Getters;
 use derive_builder::Builder;
 use serde::{Deserialize, Serialize};
 use tor_config::{
-    BoolOrAuto, ExplicitOrAuto, define_list_builder_helper, impl_not_auto_value,
-    impl_standard_builder,
+    define_list_builder_helper, impl_not_auto_value, impl_standard_builder, BoolOrAuto,
+    ExplicitOrAuto,
 };
 use tor_persist::hsnickname::HsNickname;
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
+use std::sync::Arc;
 
-use crate::KeystoreId;
+use crate::{Keystore, KeystoreId};
 
 /// The kind of keystore to use
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 #[non_exhaustive]
 pub enum ArtiKeystoreKind {
@@ -27,7 +28,38 @@ pub enum ArtiKeystoreKind {
     /// Use the [`ArtiEphemeralKeystore`](crate::ArtiEphemeralKeystore).
     #[cfg(feature = "ephemeral-keystore")]
     Ephemeral,
+    /// Use a custom keystore implementation
+    #[serde(skip)]
+    Custom(Arc<dyn Keystore>),
 }
+impl std::fmt::Debug for ArtiKeystoreKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        #[derive(Debug)]
+        enum ArtiKeystoreKind {
+            Native,
+            #[cfg(feature = "ephemeral-keystore")]
+            Ephemeral,
+            Custom,
+        }
+        match self {
+            Self::Native => ArtiKeystoreKind::Native,
+            #[cfg(feature = "ephemeral-keystore")]
+            Self::Ephemeral => ArtiKeystoreKind::Ephemeral,
+            Self::Custom(_) => ArtiKeystoreKind::Custom,
+        }
+        .fmt(f)
+    }
+}
+impl PartialEq for ArtiKeystoreKind {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Native, Self::Native) | (Self::Ephemeral, Self::Ephemeral) => true,
+            (Self::Custom(a), Self::Custom(b)) if Arc::ptr_eq(a, b) => true,
+            _ => false,
+        }
+    }
+}
+impl Eq for ArtiKeystoreKind {}
 impl_not_auto_value! {ArtiKeystoreKind}
 
 /// [`ArtiNativeKeystore`](crate::ArtiNativeKeystore) configuration
@@ -293,7 +325,7 @@ impl ArtiKeystoreConfig {
             return None;
         }
 
-        let kind = match self.primary.kind {
+        let kind = match self.primary.kind.clone() {
             EoA::Explicit(kind) => kind,
             EoA::Auto => ArtiKeystoreKind::Native,
         };
@@ -392,8 +424,8 @@ impl CTorKeystoreConfigBuilder {
     /// Validate the configured C Tor keystores.
     #[cfg(feature = "ctor-keystore")]
     fn validate(&self) -> Result<(), ConfigBuildError> {
-        use itertools::Itertools as _;
         use itertools::chain;
+        use itertools::Itertools as _;
 
         let Self { services, clients } = self;
         let mut ctor_store_ids = chain![

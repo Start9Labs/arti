@@ -1066,7 +1066,7 @@ mod tests {
             #[allow(dead_code)] // this is only dead code for Keystore1
             impl $name {
                 fn new_boxed() -> BoxedKeystore {
-                    Box::<Self>::default()
+                    Arc::<Self>::default()
                 }
             }
 
@@ -1257,7 +1257,7 @@ mod tests {
     #[test]
     #[allow(clippy::cognitive_complexity)]
     fn insert_and_get() {
-        let mut builder = KeyMgrBuilder::default().primary_store(Box::<Keystore1>::default());
+        let mut builder = KeyMgrBuilder::default().primary_store(Arc::<Keystore1>::default());
 
         builder
             .secondary_stores()
@@ -1435,7 +1435,7 @@ mod tests {
 
     #[test]
     fn remove() {
-        let mut builder = KeyMgrBuilder::default().primary_store(Box::<Keystore1>::default());
+        let mut builder = KeyMgrBuilder::default().primary_store(Arc::<Keystore1>::default());
 
         builder
             .secondary_stores()
@@ -1443,11 +1443,9 @@ mod tests {
 
         let mgr = builder.build().unwrap();
 
-        assert!(
-            !mgr.secondary_stores[0]
-                .contains(&TestKeySpecifier1, &TestItem::item_type())
-                .unwrap()
-        );
+        assert!(!mgr.secondary_stores[0]
+            .contains(&TestKeySpecifier1, &TestItem::item_type())
+            .unwrap());
 
         // Insert a key into Keystore2
         mgr.insert(
@@ -1466,33 +1464,27 @@ mod tests {
         assert_eq!(key.meta.is_generated(), false);
 
         // Try to remove the key from a non-existent key store
-        assert!(
-            mgr.remove::<TestItem>(
+        assert!(mgr
+            .remove::<TestItem>(
                 &TestKeySpecifier1,
                 KeystoreSelector::Id(&KeystoreId::from_str("not_an_id_we_know_of").unwrap())
             )
-            .is_err()
-        );
+            .is_err());
         // The key still exists in Keystore2
-        assert!(
-            mgr.secondary_stores[0]
-                .contains(&TestKeySpecifier1, &TestItem::item_type())
-                .unwrap()
-        );
+        assert!(mgr.secondary_stores[0]
+            .contains(&TestKeySpecifier1, &TestItem::item_type())
+            .unwrap());
 
         // Try to remove the key from the primary key store
-        assert!(
-            mgr.remove::<TestItem>(&TestKeySpecifier1, KeystoreSelector::Primary)
-                .unwrap()
-                .is_none()
-        );
+        assert!(mgr
+            .remove::<TestItem>(&TestKeySpecifier1, KeystoreSelector::Primary)
+            .unwrap()
+            .is_none());
 
         // The key still exists in Keystore2
-        assert!(
-            mgr.secondary_stores[0]
-                .contains(&TestKeySpecifier1, &TestItem::item_type())
-                .unwrap()
-        );
+        assert!(mgr.secondary_stores[0]
+            .contains(&TestKeySpecifier1, &TestItem::item_type())
+            .unwrap());
 
         // Removing from Keystore2 should succeed.
         let removed_key = mgr
@@ -1510,18 +1502,16 @@ mod tests {
         assert_eq!(removed_key.meta.is_generated(), false);
 
         // The key doesn't exist in Keystore2 anymore
-        assert!(
-            !mgr.secondary_stores[0]
-                .contains(&TestKeySpecifier1, &TestItem::item_type())
-                .unwrap()
-        );
+        assert!(!mgr.secondary_stores[0]
+            .contains(&TestKeySpecifier1, &TestItem::item_type())
+            .unwrap());
     }
 
     #[test]
     fn keygen() {
         let mut rng = FakeEntropicRng(testing_rng());
         let mgr = KeyMgrBuilder::default()
-            .primary_store(Box::<Keystore1>::default())
+            .primary_store(Arc::<Keystore1>::default())
             .build()
             .unwrap();
 
@@ -1534,11 +1524,10 @@ mod tests {
         .unwrap();
 
         // There is no corresponding public key entry.
-        assert!(
-            mgr.get::<TestPublicKey>(&TestPublicKeySpecifier1)
-                .unwrap()
-                .is_none()
-        );
+        assert!(mgr
+            .get::<TestPublicKey>(&TestPublicKeySpecifier1)
+            .unwrap()
+            .is_none());
 
         // Try to generate a new key (overwrite = false)
         let err = mgr
@@ -1562,11 +1551,10 @@ mod tests {
         assert_eq!(key.meta.is_generated(), false);
 
         // We don't store public keys in the keystore
-        assert!(
-            mgr.get::<TestPublicKey>(&TestPublicKeySpecifier1)
-                .unwrap()
-                .is_none()
-        );
+        assert!(mgr
+            .get::<TestPublicKey>(&TestPublicKeySpecifier1)
+            .unwrap()
+            .is_none());
 
         // Try to generate a new key (overwrite = true)
         let generated_key = mgr
@@ -1594,17 +1582,16 @@ mod tests {
         assert_eq!(retrieved_key.meta.is_generated(), true);
 
         // We don't store public keys in the keystore
-        assert!(
-            mgr.get::<TestPublicKey>(&TestPublicKeySpecifier1)
-                .unwrap()
-                .is_none()
-        );
+        assert!(mgr
+            .get::<TestPublicKey>(&TestPublicKeySpecifier1)
+            .unwrap()
+            .is_none());
     }
 
     #[test]
     fn get_or_generate() {
         let mut rng = FakeEntropicRng(testing_rng());
-        let mut builder = KeyMgrBuilder::default().primary_store(Box::<Keystore1>::default());
+        let mut builder = KeyMgrBuilder::default().primary_store(Arc::<Keystore1>::default());
 
         builder
             .secondary_stores()
@@ -1697,7 +1684,7 @@ mod tests {
 
     #[test]
     fn list_matching_ignores_unrecognized_keys() {
-        let builder = KeyMgrBuilder::default().primary_store(Box::new(KeystoreUnrec1::default()));
+        let builder = KeyMgrBuilder::default().primary_store(Arc::new(KeystoreUnrec1::default()));
 
         let mgr = builder.build().unwrap();
 

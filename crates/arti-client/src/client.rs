@@ -13,20 +13,20 @@ use crate::address::{IntoTorAddr, ResolveInstructions, StreamInstructions};
 use crate::config::{
     ClientAddrConfig, SoftwareStatusOverrideConfig, StreamTimeoutConfig, TorClientConfig,
 };
-use safelog::{Sensitive, sensitive};
+use safelog::{sensitive, Sensitive};
 use tor_async_utils::{DropNotifyWatchSender, PostageWatchSenderExt};
-use tor_circmgr::ClientDataTunnel;
 use tor_circmgr::isolation::{Isolation, StreamIsolation};
-use tor_circmgr::{IsolationToken, TargetPort, isolation::StreamIsolationBuilder};
+use tor_circmgr::ClientDataTunnel;
+use tor_circmgr::{isolation::StreamIsolationBuilder, IsolationToken, TargetPort};
 use tor_config::MutCfg;
 #[cfg(feature = "bridge-client")]
 use tor_dirmgr::bridgedesc::BridgeDescMgr;
 use tor_dirmgr::{DirMgrStore, Timeliness};
-use tor_error::{Bug, error_report, internal};
+use tor_error::{error_report, internal, Bug};
 use tor_guardmgr::{GuardMgr, RetireCircuits};
 use tor_keymgr::Keystore;
 use tor_memquota::MemoryQuotaTracker;
-use tor_netdir::{NetDirProvider, params::NetParameters};
+use tor_netdir::{params::NetParameters, NetDirProvider};
 #[cfg(feature = "onion-service-service")]
 use tor_persist::state_dir::StateDirectory;
 use tor_persist::{FsStateMgr, StateMgr};
@@ -50,7 +50,7 @@ use tor_hsservice::HsIdKeypairSpecifier;
 #[cfg(all(feature = "onion-service-client", feature = "experimental-api"))]
 use {tor_hscrypto::pk::HsId, tor_hscrypto::pk::HsIdKeypair, tor_keymgr::KeystoreSelector};
 
-use tor_keymgr::{ArtiNativeKeystore, KeyMgr, KeyMgrBuilder, config::ArtiKeystoreKind};
+use tor_keymgr::{config::ArtiKeystoreKind, ArtiNativeKeystore, KeyMgr, KeyMgrBuilder};
 
 #[cfg(feature = "ephemeral-keystore")]
 use tor_keymgr::ArtiEphemeralKeystore;
@@ -58,15 +58,15 @@ use tor_keymgr::ArtiEphemeralKeystore;
 #[cfg(feature = "ctor-keystore")]
 use tor_keymgr::{CTorClientKeystore, CTorServiceKeystore};
 
-use futures::StreamExt as _;
 use futures::lock::Mutex as AsyncMutex;
 use futures::task::SpawnExt;
+use futures::StreamExt as _;
 use std::net::IpAddr;
 use std::result::Result as StdResult;
 use std::sync::{Arc, Mutex};
 
 use crate::err::ErrorDetail;
-use crate::{TorClientBuilder, status, util};
+use crate::{status, util, TorClientBuilder};
 #[cfg(feature = "geoip")]
 use tor_geoip::CountryCode;
 use tor_rtcompat::scheduler::TaskHandle;
@@ -244,7 +244,7 @@ impl InertTorClient {
     fn create_keymgr(config: &TorClientConfig) -> StdResult<Option<Arc<KeyMgr>>, ErrorDetail> {
         let keystore = config.storage.keystore();
         let permissions = config.storage.permissions();
-        let primary_store: Box<dyn Keystore> = match keystore.primary_kind() {
+        let primary_store: Arc<dyn Keystore> = match keystore.primary_kind() {
             Some(ArtiKeystoreKind::Native) => {
                 let (state_dir, _mistrust) = config.state_dir()?;
                 let key_store_dir = state_dir.join("keystore");
@@ -253,15 +253,16 @@ impl InertTorClient {
                     ArtiNativeKeystore::from_path_and_mistrust(&key_store_dir, permissions)?;
                 info!("Using keystore from {key_store_dir:?}");
 
-                Box::new(native_store)
+                Arc::new(native_store)
             }
             #[cfg(feature = "ephemeral-keystore")]
             Some(ArtiKeystoreKind::Ephemeral) => {
                 // TODO: make the keystore ID somehow configurable
                 let ephemeral_store: ArtiEphemeralKeystore =
                     ArtiEphemeralKeystore::new("ephemeral".to_string());
-                Box::new(ephemeral_store)
+                Arc::new(ephemeral_store)
             }
+            Some(ArtiKeystoreKind::Custom(keystore)) => keystore.clone(),
             None => {
                 info!("Running without a keystore");
                 return Ok(None);

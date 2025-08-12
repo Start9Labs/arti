@@ -116,7 +116,7 @@ derive_deftly::template_export_semver_check! { "0.12.1" }
 pub use dummy::*;
 
 /// A boxed [`Keystore`].
-pub(crate) type BoxedKeystore = Box<dyn Keystore>;
+pub(crate) type BoxedKeystore = Arc<dyn Keystore>;
 
 #[doc(hidden)]
 pub use {derive_deftly, inventory};
@@ -124,6 +124,7 @@ pub use {derive_deftly, inventory};
 use derive_more::{AsRef, Display, From};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
+use std::sync::Arc;
 
 /// A Result type for this crate.
 pub type Result<T> = std::result::Result<T, Error>;
